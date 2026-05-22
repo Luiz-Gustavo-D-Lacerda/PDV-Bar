@@ -7,19 +7,27 @@ import api from '../lib/api';
 import useAuthStore from '../store/auth';
 
 const STATUS_LABEL = {
-  RECEBIDO: 'Recebido',
+  RECEBIDO:   'Recebido',
   EM_PREPARO: 'Em preparo',
-  PRONTO: 'Pronto',
-  ENTREGUE: 'Entregue',
-  CANCELADO: 'Cancelado',
+  PRONTO:     'Pronto para entregar',
+  ENTREGUE:   'Entregue',
+  CANCELADO:  'Cancelado',
+};
+
+const STATUS_ICON = {
+  RECEBIDO:   '🕐',
+  EM_PREPARO: '🔥',
+  PRONTO:     '✅',
+  ENTREGUE:   '🙌',
+  CANCELADO:  '✕',
 };
 
 const STATUS_COLOR = {
-  RECEBIDO: 'bg-gray-100 text-gray-600',
-  EM_PREPARO: 'bg-yellow-100 text-yellow-700',
-  PRONTO: 'bg-green-100 text-green-700',
-  ENTREGUE: 'bg-blue-100 text-blue-700',
-  CANCELADO: 'bg-red-100 text-red-600',
+  RECEBIDO:   'bg-gray-100 text-gray-600',
+  EM_PREPARO: 'bg-amber-100 text-amber-700',
+  PRONTO:     'bg-green-100 text-green-700',
+  ENTREGUE:   'bg-blue-100 text-blue-700',
+  CANCELADO:  'bg-red-100 text-red-500',
 };
 
 const FORMA_OPCOES = [
@@ -253,40 +261,67 @@ export default function ComandaPage() {
         />
       )}
 
-      {/* Header */}
-      <div className="bg-green-700 text-white p-4">
-        <div className="flex items-center justify-between mb-1">
-          <Link to={`/mesa/${mesaId}`} className="flex items-center gap-1 text-green-200 text-sm hover:text-white">
-            <ArrowLeft size={14} /> Mesa
-          </Link>
-          {token && (
-            <Link
-              to={user?.role === 'ADMIN' || user?.role === 'GERENTE' ? '/admin' : '/garcom'}
-              className="flex items-center gap-1 text-green-200 text-xs hover:text-white"
-            >
-              Painel <ArrowLeft size={12} className="rotate-180" />
+      {/* Header com gradiente */}
+      <div className="bg-gradient-to-br from-green-800 via-green-700 to-emerald-600 text-white px-5 pt-10 pb-6 relative overflow-hidden">
+        <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full" />
+        <div className="absolute bottom-0 left-1/3 w-40 h-20 bg-white/5 rounded-full blur-xl" />
+        <div className="relative">
+          <div className="flex items-center justify-between mb-4">
+            <Link to={`/mesa/${mesaId}`} className="flex items-center gap-1.5 text-green-200 text-sm hover:text-white transition-colors">
+              <ArrowLeft size={14} /> Voltar
             </Link>
-          )}
+            {token && (
+              <Link
+                to={user?.role === 'ADMIN' || user?.role === 'GERENTE' ? '/admin' : '/garcom'}
+                className="text-green-200 text-xs hover:text-white transition-colors"
+              >
+                Painel →
+              </Link>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl font-black backdrop-blur-sm">
+              {comanda.mesa.numero}
+            </div>
+            <div>
+              <p className="text-green-200 text-xs font-medium">Mesa</p>
+              <h1 className="text-2xl font-black leading-tight">
+                {comanda.nome ? comanda.nome : `Mesa ${comanda.mesa.numero}`}
+              </h1>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${
+              paga ? 'bg-green-900/50 text-green-200' :
+              aguardando ? 'bg-purple-900/50 text-purple-200' :
+              'bg-white/20 text-white'
+            }`}>
+              <span>{paga ? '✓' : aguardando ? '⏳' : '🍽️'}</span>
+              {paga ? 'Pago' : aguardando ? 'Aguardando caixa' : 'Pedido em andamento'}
+            </span>
+          </div>
         </div>
-        <h1 className="font-bold text-xl">Mesa {comanda.mesa.numero}</h1>
-        <p className="text-green-200 text-sm">Acompanhe seu pedido</p>
       </div>
 
-      {/* Banner comanda paga */}
+      {/* Banner paga */}
       {paga && (
-        <div className="m-4 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-          <CheckCircle2 size={24} className="text-green-500 flex-shrink-0" />
+        <div className="mx-4 mt-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 size={22} className="text-green-600" />
+          </div>
           <div>
             <p className="font-bold text-green-800">Pagamento confirmado!</p>
-            <p className="text-sm text-green-600">Obrigado pela visita. Volte sempre!</p>
+            <p className="text-sm text-green-600">Obrigado pela visita. Volte sempre! 🙌</p>
           </div>
         </div>
       )}
 
-      {/* Banner aguardando pagamento */}
+      {/* Banner aguardando */}
       {aguardando && (
-        <div className="m-4 bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3">
-          <Clock size={24} className="text-purple-500 flex-shrink-0" />
+        <div className="mx-4 mt-4 bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-2xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Clock size={22} className="text-purple-600" />
+          </div>
           <div>
             <p className="font-bold text-purple-800">Aguardando pagamento</p>
             <p className="text-sm text-purple-600">O caixa irá confirmar em breve.</p>
@@ -295,52 +330,62 @@ export default function ComandaPage() {
       )}
 
       {/* Pedidos */}
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-3 max-w-lg mx-auto">
         {comanda.pedidos.map((pedido, idx) => (
-          <div key={pedido.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-              <span className="font-semibold text-gray-700">Pedido #{idx + 1}</span>
-              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLOR[pedido.status]}`}>
+          <div key={pedido.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {/* Cabeçalho do pedido */}
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+              <span className="font-bold text-gray-700 text-sm">Pedido #{idx + 1}</span>
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLOR[pedido.status]}`}>
+                <span>{STATUS_ICON[pedido.status]}</span>
                 {STATUS_LABEL[pedido.status]}
               </span>
             </div>
+
+            {/* Sub-pedidos */}
             {pedido.subPedidos.map((sub) => {
               const cancelavel = podeCancelar && !['CANCELADO', 'ENTREGUE'].includes(sub.status);
+              const isCancelado = sub.status === 'CANCELADO';
               return (
-                <div key={sub.id} className={`p-4 border-b last:border-0 ${sub.status === 'CANCELADO' ? 'opacity-60' : ''}`}>
-                  <div className="flex items-center justify-between mb-2">
+                <div key={sub.id} className={`px-4 py-3 border-b last:border-0 transition-opacity ${isCancelado ? 'opacity-50' : ''}`}>
+                  {/* Terminal header */}
+                  <div className="flex items-center justify-between mb-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: sub.terminal.cor }} />
-                      <span className="text-sm font-medium text-gray-600">{sub.terminal.nome}</span>
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: sub.terminal.cor }} />
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{sub.terminal.nome}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[sub.status]}`}>
-                        {STATUS_LABEL[sub.status]}
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[sub.status]}`}>
+                        {STATUS_ICON[sub.status]} {STATUS_LABEL[sub.status]}
                       </span>
                       {cancelavel && (
                         <button onClick={() => setCancelando(sub)}
                           className="p-1 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                          title="Cancelar este pedido">
-                          <XCircle size={16} />
+                          title="Cancelar">
+                          <XCircle size={15} />
                         </button>
                       )}
                     </div>
                   </div>
-                  {sub.itens.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm py-0.5 ml-4">
-                      <span className={`text-gray-700 ${sub.status === 'CANCELADO' ? 'line-through' : ''}`}>
-                        {item.quantidade}x {item.produto.nome}
-                      </span>
-                      <span className="text-gray-500">
-                        R$ {(Number(item.precoUnitario) * item.quantidade).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                  ))}
-                  {sub.status === 'CANCELADO' && sub.motivoCancelamento && (
-                    <p className="mt-1.5 ml-4 text-xs text-red-500 flex items-center gap-1">
-                      <AlertTriangle size={11} /> {sub.motivoCancelamento}
-                    </p>
-                  )}
+
+                  {/* Itens */}
+                  <div className="space-y-1.5 pl-4">
+                    {sub.itens.map((item) => (
+                      <div key={item.id} className="flex justify-between items-center">
+                        <span className={`text-sm text-gray-700 ${isCancelado ? 'line-through' : ''}`}>
+                          <span className="font-semibold text-gray-900">{item.quantidade}×</span> {item.produto.nome}
+                        </span>
+                        <span className={`text-sm font-medium ${isCancelado ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                          R$ {(Number(item.precoUnitario) * item.quantidade).toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                    ))}
+                    {isCancelado && sub.motivoCancelamento && (
+                      <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                        <AlertTriangle size={10} /> {sub.motivoCancelamento}
+                      </p>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -349,50 +394,49 @@ export default function ComandaPage() {
       </div>
 
       {/* Rodapé fixo */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-xl p-4 space-y-3">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-100 shadow-2xl px-4 pt-3 pb-5 space-y-3 max-w-lg mx-auto">
         {/* Total */}
         <div className="flex justify-between items-center">
-          <span className="font-semibold text-gray-700">Total da comanda</span>
-          <span className="text-xl font-bold text-green-600">
+          <span className="text-sm font-medium text-gray-500">Total da comanda</span>
+          <span className="text-2xl font-black text-green-600">
             R$ {total.toFixed(2).replace('.', ',')}
           </span>
         </div>
 
-        {/* Ações conforme status */}
         {aberta && (
-          <>
-            <Link to={`/mesa/${mesaId}/cardapio/${comandaId}`}
-              className="block text-center bg-green-600 text-white py-2.5 rounded-xl font-medium hover:bg-green-700 transition-colors">
-              Adicionar mais itens
+          <div className="flex gap-2">
+            <Link
+              to={`/mesa/${mesaId}/cardapio/${comandaId}`}
+              className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 border-green-600 text-green-700 font-semibold text-sm hover:bg-green-50 transition-colors"
+            >
+              + Adicionar itens
             </Link>
-
             {isGarcom && (
               <button
                 onClick={() => setModalPagamento(true)}
-                className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white py-2.5 rounded-xl font-medium hover:bg-gray-800 transition-colors"
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-gradient-to-r from-gray-900 to-gray-800 text-white font-semibold text-sm hover:from-gray-800 hover:to-gray-700 transition-all shadow-sm"
               >
-                <Receipt size={16} />
-                Fechar conta
+                <Receipt size={15} /> Fechar conta
               </button>
             )}
+          </div>
+        )}
 
-            {!isStaff && (
-              <p className="text-center text-sm text-gray-500 py-1">
-                Para pagar, chame o garçom.
-              </p>
-            )}
-          </>
+        {!isStaff && aberta && (
+          <p className="text-center text-xs text-gray-400">
+            Para pagar, chame o garçom.
+          </p>
         )}
 
         {aguardando && (
-          <div className="text-center text-sm text-purple-600 font-medium py-1">
-            Conta solicitada — aguardando o caixa
+          <div className="flex items-center justify-center gap-2 py-2 text-sm text-purple-600 font-medium">
+            <Clock size={15} /> Conta solicitada — aguardando o caixa
           </div>
         )}
 
         {paga && (
-          <div className="text-center text-green-600 font-semibold py-1">
-            Comanda encerrada ✓
+          <div className="flex items-center justify-center gap-2 py-2 text-sm text-green-600 font-semibold">
+            <CheckCircle2 size={15} /> Comanda encerrada
           </div>
         )}
       </div>
