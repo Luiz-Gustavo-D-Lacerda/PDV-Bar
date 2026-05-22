@@ -7,7 +7,6 @@ import useAuthStore from '../store/auth';
 
 const ROLE_CONFIG = {
   GARCOM: { label: 'Garçom', color: 'from-blue-500 to-blue-600', bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-300' },
-  CAIXA:  { label: 'Caixa',  color: 'from-purple-500 to-purple-600', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-300' },
 };
 
 export default function LoginPage() {
@@ -99,7 +98,7 @@ export default function LoginPage() {
             {/* Tabs */}
             <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl mb-6">
               {[
-                { id: 'garcom', label: 'Garçom / Caixa' },
+                { id: 'garcom', label: 'Garçom' },
                 { id: 'admin',  label: 'Administrador' },
               ].map(({ id, label }) => (
                 <button key={id} onClick={() => trocarAba(id)}

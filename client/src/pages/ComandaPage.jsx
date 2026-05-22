@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Loader2, ChefHat, ArrowLeft, XCircle, AlertTriangle, Receipt, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, ChefHat, ArrowLeft, XCircle, AlertTriangle, Receipt, CheckCircle2, Clock, Pencil, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import socket from '../lib/socket';
 import api from '../lib/api';
@@ -35,6 +35,33 @@ const FORMA_OPCOES = [
   { key: 'CARTAO',  label: 'Cartão',  icon: '💳', desc: 'Débito ou crédito' },
   { key: 'DINHEIRO',label: 'Dinheiro',icon: '💵', desc: 'Pagamento em espécie' },
 ];
+
+function ModalAutoPagar({ forma, total, onConfirm, onClose, loading }) {
+  const info = { PIX: { icon: '📱', label: 'PIX', desc: 'Realize o pagamento pelo seu app de banco e confirme abaixo.' }, CARTAO: { icon: '💳', label: 'Cartão', desc: 'Apresente o cartão para o garçom e confirme abaixo.' } }[forma];
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
+        <div className="text-center">
+          <span className="text-5xl">{info.icon}</span>
+          <h3 className="font-bold text-gray-900 text-lg mt-3">Pagar com {info.label}</h3>
+          <p className="text-4xl font-black text-green-600 mt-2">R$ {total}</p>
+        </div>
+        <p className="text-sm text-gray-500 text-center">{info.desc}</p>
+        <div className="flex gap-2">
+          <button onClick={onClose} disabled={loading}
+            className="flex-1 py-2.5 border rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={onConfirm} disabled={loading}
+            className="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading && <Loader2 size={14} className="animate-spin" />}
+            Confirmei o pagamento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ModalPagamento({ total, podeDinheiro, onConfirm, onClose, loading }) {
   const [forma, setForma] = useState(null);
@@ -151,10 +178,14 @@ export default function ComandaPage() {
   const [cancelando, setCancelando] = useState(null);
   const [modalPagamento, setModalPagamento] = useState(false);
   const [loadingPagar, setLoadingPagar] = useState(false);
+  const [modalAutoPagar, setModalAutoPagar] = useState(null);
+  const [loadingAutoPagar, setLoadingAutoPagar] = useState(false);
+  const [editandoNome, setEditandoNome] = useState(false);
+  const [nomeEdit, setNomeEdit] = useState('');
+  const nomeInputRef = useRef(null);
+  const [msgAgradecimento, setMsgAgradecimento] = useState('Obrigado pela visita. Volte sempre! 🙌');
 
   const isStaff = !!token;
-  const isCaixa = ['ADMIN', 'GERENTE', 'CAIXA'].includes(user?.role);
-  const isGarcom = isStaff;
 
   const podeCancelar =
     token &&
@@ -179,6 +210,9 @@ export default function ComandaPage() {
 
   useEffect(() => {
     loadComanda();
+    api.get('/configuracoes').then(({ data }) => {
+      if (data.mensagemAgradecimento) setMsgAgradecimento(data.mensagemAgradecimento);
+    }).catch(() => {});
     socket.connect();
     socket.emit('entrar_mesa', mesaId);
     socket.on('comanda_atualizada', () => loadComanda());
@@ -190,6 +224,24 @@ export default function ComandaPage() {
     };
   }, [comandaId]);
 
+  function iniciarEditNome() {
+    setNomeEdit(comanda.nome || '');
+    setEditandoNome(true);
+    setTimeout(() => nomeInputRef.current?.focus(), 50);
+  }
+
+  async function salvarNome() {
+    try {
+      await api.patch(`/comandas/${comanda.id}/nome`, { nome: nomeEdit.trim() || null });
+      setComanda((prev) => ({ ...prev, nome: nomeEdit.trim() || null }));
+      toast.success('Nome atualizado');
+    } catch {
+      toast.error('Erro ao salvar nome');
+    } finally {
+      setEditandoNome(false);
+    }
+  }
+
   async function confirmarCancelamento(subId, motivo) {
     try {
       await api.post(`/subpedidos/${subId}/cancelar`, { motivo });
@@ -198,6 +250,20 @@ export default function ComandaPage() {
       loadComanda();
     } catch (e) {
       toast.error(e.response?.data?.erro || 'Erro ao cancelar');
+    }
+  }
+
+  async function autopagar(formaPagamento) {
+    setLoadingAutoPagar(true);
+    try {
+      await api.post(`/comandas/${comanda.id}/autopagar`, { formaPagamento });
+      toast.success('Pagamento confirmado!');
+      setModalAutoPagar(null);
+      loadComanda();
+    } catch (e) {
+      toast.error(e.response?.data?.erro || 'Erro ao processar pagamento');
+    } finally {
+      setLoadingAutoPagar(false);
     }
   }
 
@@ -260,6 +326,15 @@ export default function ComandaPage() {
           loading={loadingPagar}
         />
       )}
+      {modalAutoPagar && (
+        <ModalAutoPagar
+          forma={modalAutoPagar}
+          total={total.toFixed(2).replace('.', ',')}
+          onConfirm={() => autopagar(modalAutoPagar)}
+          onClose={() => setModalAutoPagar(null)}
+          loading={loadingAutoPagar}
+        />
+      )}
 
       {/* Header com gradiente */}
       <div className="bg-gradient-to-br from-green-800 via-green-700 to-emerald-600 text-white px-5 pt-10 pb-6 relative overflow-hidden">
@@ -283,11 +358,37 @@ export default function ComandaPage() {
             <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl font-black backdrop-blur-sm">
               {comanda.mesa.numero}
             </div>
-            <div>
-              <p className="text-green-200 text-xs font-medium">Mesa</p>
-              <h1 className="text-2xl font-black leading-tight">
-                {comanda.nome ? comanda.nome : `Mesa ${comanda.mesa.numero}`}
-              </h1>
+            <div className="flex-1 min-w-0">
+              <p className="text-green-200 text-xs font-medium">Mesa {comanda.mesa.numero}</p>
+              {editandoNome ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    ref={nomeInputRef}
+                    value={nomeEdit}
+                    onChange={(e) => setNomeEdit(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') salvarNome(); if (e.key === 'Escape') setEditandoNome(false); }}
+                    placeholder="Nome do cliente..."
+                    className="flex-1 min-w-0 bg-white/20 text-white placeholder-green-300 rounded-lg px-2 py-1 text-sm font-semibold outline-none focus:ring-2 focus:ring-white/50"
+                  />
+                  <button onClick={salvarNome} className="p-1 rounded-lg bg-white/20 hover:bg-white/30 transition-colors">
+                    <Check size={14} />
+                  </button>
+                  <button onClick={() => setEditandoNome(false)} className="p-1 rounded-lg hover:bg-white/20 transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-black leading-tight truncate">
+                    {comanda.nome || `Mesa ${comanda.mesa.numero}`}
+                  </h1>
+                  {token && !paga && (
+                    <button onClick={iniciarEditNome} className="p-1 rounded-lg hover:bg-white/20 transition-colors text-green-300 hover:text-white flex-shrink-0" title="Editar nome">
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -297,7 +398,7 @@ export default function ComandaPage() {
               'bg-white/20 text-white'
             }`}>
               <span>{paga ? '✓' : aguardando ? '⏳' : '🍽️'}</span>
-              {paga ? 'Pago' : aguardando ? 'Aguardando caixa' : 'Pedido em andamento'}
+              {paga ? 'Pago' : aguardando ? 'Aguardando confirmação' : 'Pedido em andamento'}
             </span>
           </div>
         </div>
@@ -311,7 +412,7 @@ export default function ComandaPage() {
           </div>
           <div>
             <p className="font-bold text-green-800">Pagamento confirmado!</p>
-            <p className="text-sm text-green-600">Obrigado pela visita. Volte sempre! 🙌</p>
+            <p className="text-sm text-green-600">{msgAgradecimento}</p>
           </div>
         </div>
       )}
@@ -324,7 +425,7 @@ export default function ComandaPage() {
           </div>
           <div>
             <p className="font-bold text-purple-800">Aguardando pagamento</p>
-            <p className="text-sm text-purple-600">O caixa irá confirmar em breve.</p>
+            <p className="text-sm text-purple-600">Aguardando confirmação do garçom.</p>
           </div>
         </div>
       )}
@@ -411,7 +512,7 @@ export default function ComandaPage() {
             >
               + Adicionar itens
             </Link>
-            {isGarcom && (
+            {isStaff && (
               <button
                 onClick={() => setModalPagamento(true)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-gradient-to-r from-gray-900 to-gray-800 text-white font-semibold text-sm hover:from-gray-800 hover:to-gray-700 transition-all shadow-sm"
@@ -422,15 +523,30 @@ export default function ComandaPage() {
           </div>
         )}
 
-        {!isStaff && aberta && (
-          <p className="text-center text-xs text-gray-400">
-            Para pagar, chame o garçom.
-          </p>
+        {!isStaff && aberta && total > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs text-center text-gray-500 font-medium">Pagar agora com:</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setModalAutoPagar('PIX')}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-green-600 text-white font-semibold text-sm hover:bg-green-700 transition-colors shadow-sm"
+              >
+                📱 PIX
+              </button>
+              <button
+                onClick={() => setModalAutoPagar('CARTAO')}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                💳 Cartão
+              </button>
+            </div>
+            <p className="text-xs text-center text-gray-400">Para pagar em dinheiro, chame o garçom.</p>
+          </div>
         )}
 
         {aguardando && (
           <div className="flex items-center justify-center gap-2 py-2 text-sm text-purple-600 font-medium">
-            <Clock size={15} /> Conta solicitada — aguardando o caixa
+            <Clock size={15} /> Aguardando confirmação do garçom
           </div>
         )}
 

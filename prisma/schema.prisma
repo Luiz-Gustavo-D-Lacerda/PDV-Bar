@@ -128,6 +128,7 @@ model Produto {
   preco       Decimal
   imagemUrl   String?
   ativo       Boolean         @default(true)
+  destaque    Boolean         @default(false)
   categoria   Categoria       @relation(fields: [categoriaId], references: [id])
   categoriaId String
   terminal    Terminal        @relation(fields: [terminalId], references: [id])
@@ -146,6 +147,12 @@ model Estoque {
   movimentacoes MovimentacaoEstoque[]
 }
 
+model Configuracoes {
+  id        String   @id @default("singleton")
+  dados     Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
 model MovimentacaoEstoque {
   id         String           @id @default(uuid())
   estoque    Estoque          @relation(fields: [estoqueId], references: [id])
@@ -160,4 +167,32 @@ enum TipoMovimentacao {
   ENTRADA
   SAIDA
   AJUSTE
+}
+
+enum SetorInsumo {
+  BAR
+  COZINHA
+  GERAL
+}
+
+model Insumo {
+  id            String               @id @default(uuid())
+  nome          String
+  unidade       String               @default("un")
+  quantidade    Float                @default(0)
+  minimo        Float                @default(0)
+  setor         SetorInsumo          @default(GERAL)
+  ativo         Boolean              @default(true)
+  criadoEm      DateTime             @default(now())
+  movimentacoes MovimentacaoInsumo[]
+}
+
+model MovimentacaoInsumo {
+  id         String           @id @default(uuid())
+  insumo     Insumo           @relation(fields: [insumoId], references: [id])
+  insumoId   String
+  tipo       TipoMovimentacao
+  quantidade Float
+  motivo     String?
+  criadoEm   DateTime         @default(now())
 }

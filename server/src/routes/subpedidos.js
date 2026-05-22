@@ -30,6 +30,10 @@ terminaisRouter.get('/:id/subpedidos', async (req, res) => {
 router.put('/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
+    const STATUS_VALIDOS = ['RECEBIDO', 'EM_PREPARO', 'PRONTO', 'ENTREGUE'];
+    if (!STATUS_VALIDOS.includes(status)) {
+      return res.status(400).json({ erro: 'Status inválido' });
+    }
     const subPedido = await prisma.subPedido.update({
       where: { id: req.params.id },
       data: { status },
@@ -48,10 +52,18 @@ router.put('/:id/status', async (req, res) => {
     // Desconta estoque ao marcar como ENTREGUE
     if (status === 'ENTREGUE') {
       for (const item of subPedido.itens) {
-        await prisma.estoque.updateMany({
-          where: { produtoId: item.produtoId },
-          data: { quantidade: { decrement: item.quantidade } },
-        });
+        const estoque = await prisma.estoque.findUnique({ where: { produtoId: item.produtoId } });
+        if (estoque) {
+          await prisma.$transaction([
+            prisma.estoque.update({
+              where: { id: estoque.id },
+              data: { quantidade: { decrement: item.quantidade } },
+            }),
+            prisma.movimentacaoEstoque.create({
+              data: { estoqueId: estoque.id, tipo: 'SAIDA', quantidade: item.quantidade, motivo: 'Venda automática' },
+            }),
+          ]);
+        }
       }
     }
 
@@ -90,12 +102,12 @@ router.put('/:id/status', async (req, res) => {
 });
 
 // Cancelar sub-pedido (garçom com permissão)
-router.post('/:id/cancelar', auth(['ADMIN', 'GERENTE', 'GARCOM', 'CAIXA']), async (req, res) => {
+router.post('/:id/cancelar', auth(['ADMIN', 'GERENTE', 'GARCOM']), async (req, res) => {
   try {
     const { motivo } = req.body;
 
-    // GARCOM e CAIXA precisam ter permissão explícita
-    if (['GARCOM', 'CAIXA'].includes(req.user.role)) {
+    // GARCOM precisa ter permissão explícita
+    if (req.user.role === 'GARCOM') {
       const dbUser = await prisma.user.findUnique({ where: { id: req.user.id } });
       const perms = dbUser?.permissoes || {};
       if (!perms.cancelarItens) {

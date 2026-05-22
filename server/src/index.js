@@ -5,6 +5,9 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 
 const authRoutes = require('./routes/auth');
+const uploadRoutes = require('./routes/upload');
+const categoriasRoutes = require('./routes/categorias');
+const configuracoesRoutes = require('./routes/configuracoes');
 const terminaisRoutes = require('./routes/terminais');
 const cardapioRoutes = require('./routes/cardapio');
 const produtosRoutes = require('./routes/produtos');
@@ -15,6 +18,7 @@ const garConsRoutes = require('./routes/garcons');
 const { terminaisRouter: terminaisSubPedidosRouter } = require('./routes/subpedidos');
 const dashboardRoutes = require('./routes/dashboard');
 const estoqueRoutes = require('./routes/estoque');
+const insumosRoutes = require('./routes/insumos');
 
 const { setupSocket } = require('./socket');
 
@@ -34,7 +38,13 @@ app.use((req, _res, next) => {
   next();
 });
 
+const staticPath = require('path').join(__dirname, '../public');
+app.use(express.static(staticPath));
+
 app.use('/api/auth', authRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/categorias', categoriasRoutes);
+app.use('/api/configuracoes', configuracoesRoutes);
 app.use('/api/terminais', terminaisRoutes);
 app.use('/api/terminais', terminaisSubPedidosRouter);
 app.use('/api/cardapio', cardapioRoutes);
@@ -45,6 +55,7 @@ app.use('/api/subpedidos', subPedidosRoutes);
 app.use('/api/garcons', garConsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/estoque', estoqueRoutes);
+app.use('/api/insumos', insumosRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

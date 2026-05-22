@@ -13,6 +13,7 @@ import AdminCardapioPage from './pages/admin/CardapioPage';
 import AdminMesasPage from './pages/admin/MesasPage';
 import AdminEstoquePage from './pages/admin/EstoquePage';
 import AdminGarconsPage from './pages/admin/GarconsPage';
+import AdminAparenciaPage from './pages/admin/AparenciaPage';
 import AdminLayout from './components/AdminLayout';
 
 function PrivateRoute({ children, roles }) {
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="mesas" element={<AdminMesasPage />} />
         <Route path="estoque" element={<AdminEstoquePage />} />
         <Route path="garcons" element={<AdminGarconsPage />} />
+        <Route path="aparencia" element={<AdminAparenciaPage />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/login" replace />} />

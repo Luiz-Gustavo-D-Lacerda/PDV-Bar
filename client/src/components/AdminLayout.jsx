@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Monitor, UtensilsCrossed, Grid2X2,
-  Package, LogOut, Beer, Users
+  Package, LogOut, Beer, Users, Palette
 } from 'lucide-react';
 import useAuthStore from '../store/auth';
 
@@ -12,6 +12,7 @@ const nav = [
   { to: '/admin/mesas', icon: Grid2X2, label: 'Mesas' },
   { to: '/admin/estoque', icon: Package, label: 'Estoque' },
   { to: '/admin/garcons', icon: Users, label: 'Garçons' },
+  { to: '/admin/aparencia', icon: Palette, label: 'Aparência' },
 ];
 
 export default function AdminLayout() {

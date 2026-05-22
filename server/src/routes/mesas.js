@@ -35,8 +35,23 @@ router.post('/', auth(['ADMIN', 'GERENTE']), async (req, res) => {
 router.put('/:id', auth(['ADMIN', 'GERENTE']), async (req, res) => {
   try {
     const { numero, ativa } = req.body;
-    const mesa = await prisma.mesa.update({ where: { id: req.params.id }, data: { numero, ativa } });
+    const data = {};
+    if (numero !== undefined) data.numero = Number(numero);
+    if (ativa !== undefined) data.ativa = ativa;
+    const mesa = await prisma.mesa.update({ where: { id: req.params.id }, data });
     res.json(mesa);
+  } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ erro: 'Já existe uma mesa com esse número' });
+    res.status(500).json({ erro: 'Erro interno' });
+  }
+});
+
+router.delete('/:id', auth(['ADMIN', 'GERENTE']), async (req, res) => {
+  try {
+    const count = await prisma.comanda.count({ where: { mesaId: req.params.id } });
+    if (count > 0) return res.status(400).json({ erro: `Mesa tem ${count} comanda(s) registrada(s). Desative-a em vez de excluir.` });
+    await prisma.mesa.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
   } catch {
     res.status(500).json({ erro: 'Erro interno' });
   }
@@ -91,6 +106,9 @@ router.get('/:id/comandas', async (req, res) => {
 // Abrir nova comanda (sempre cria uma nova, independente de existirem outras)
 router.post('/:id/comanda/abrir', async (req, res) => {
   try {
+    const mesa = await prisma.mesa.findUnique({ where: { id: req.params.id } });
+    if (!mesa) return res.status(404).json({ erro: 'Mesa não encontrada' });
+    if (!mesa.ativa) return res.status(403).json({ erro: 'Mesa inativa' });
     const { nome } = req.body;
     const comanda = await prisma.comanda.create({
       data: { mesaId: req.params.id, nome: nome?.trim() || null },

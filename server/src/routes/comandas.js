@@ -28,6 +28,20 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Renomear comanda
+router.patch('/:id/nome', auth(['ADMIN', 'GERENTE', 'GARCOM', 'CAIXA']), async (req, res) => {
+  try {
+    const { nome } = req.body;
+    const atualizada = await prisma.comanda.update({
+      where: { id: req.params.id },
+      data: { nome: nome?.trim() || null },
+    });
+    res.json(atualizada);
+  } catch {
+    res.status(500).json({ erro: 'Erro interno' });
+  }
+});
+
 // Criar pedido na comanda (agrupa itens por terminal, cria SubPedidos)
 router.post('/:id/pedido', async (req, res) => {
   try {
@@ -44,6 +58,15 @@ router.post('/:id/pedido', async (req, res) => {
           garcomId = payload.id;
         }
       } catch {}
+    }
+
+    if (!Array.isArray(itens) || itens.length === 0) {
+      return res.status(400).json({ erro: 'Nenhum item no pedido' });
+    }
+    for (const item of itens) {
+      if (!item.produtoId || !Number.isInteger(item.quantidade) || item.quantidade < 1) {
+        return res.status(400).json({ erro: 'Item inválido no pedido' });
+      }
     }
 
     const comanda = await prisma.comanda.findUnique({ where: { id: req.params.id } });
@@ -103,8 +126,30 @@ router.post('/:id/pedido', async (req, res) => {
   }
 });
 
+// Autopagamento público — cliente paga pelo celular (PIX ou Cartão, sem autenticação)
+router.post('/:id/autopagar', async (req, res) => {
+  try {
+    const { formaPagamento } = req.body;
+    if (!['PIX', 'CARTAO'].includes(formaPagamento)) {
+      return res.status(400).json({ erro: 'Apenas PIX ou Cartão disponíveis para autopagamento' });
+    }
+    const comanda = await prisma.comanda.findUnique({ where: { id: req.params.id } });
+    if (!comanda) return res.status(404).json({ erro: 'Comanda não encontrada' });
+    if (comanda.status !== 'ABERTA') return res.status(400).json({ erro: 'Comanda não está aberta' });
+    const atualizada = await prisma.comanda.update({
+      where: { id: req.params.id },
+      data: { status: 'PAGA', pago: true, formaPagamento, fechadoEm: new Date() },
+    });
+    req.io.to('garcom').emit('comanda_atualizada', { mesaId: comanda.mesaId });
+    req.io.to(`mesa:${comanda.mesaId}`).emit('comanda_atualizada', { status: 'PAGA' });
+    res.json(atualizada);
+  } catch {
+    res.status(500).json({ erro: 'Erro interno' });
+  }
+});
+
 // Fechar comanda com forma de pagamento → vai direto para PAGA
-router.post('/:id/fechar', auth(['ADMIN', 'GERENTE', 'CAIXA', 'GARCOM']), async (req, res) => {
+router.post('/:id/fechar', auth(['ADMIN', 'GERENTE', 'GARCOM']), async (req, res) => {
   try {
     const { formaPagamento } = req.body;
     const FORMAS_VALIDAS = ['PIX', 'CARTAO', 'DINHEIRO'];
@@ -112,7 +157,7 @@ router.post('/:id/fechar', auth(['ADMIN', 'GERENTE', 'CAIXA', 'GARCOM']), async 
       return res.status(400).json({ erro: 'Forma de pagamento inválida' });
     }
 
-    if (formaPagamento === 'DINHEIRO' && ['GARCOM', 'CAIXA'].includes(req.user.role)) {
+    if (formaPagamento === 'DINHEIRO' && req.user.role === 'GARCOM') {
       const dbUser = await prisma.user.findUnique({ where: { id: req.user.id } });
       const perms = dbUser?.permissoes || {};
       if (!perms.receberDinheiro) {
@@ -137,7 +182,7 @@ router.post('/:id/fechar', auth(['ADMIN', 'GERENTE', 'CAIXA', 'GARCOM']), async 
 });
 
 // Pagar comanda
-router.post('/:id/pagar', auth(['ADMIN', 'GERENTE', 'CAIXA']), async (req, res) => {
+router.post('/:id/pagar', auth(['ADMIN', 'GERENTE']), async (req, res) => {
   try {
     const comanda = await prisma.comanda.findUnique({ where: { id: req.params.id } });
     if (!comanda) return res.status(404).json({ erro: 'Comanda não encontrada' });

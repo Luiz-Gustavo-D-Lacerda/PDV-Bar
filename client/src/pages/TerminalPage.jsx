@@ -64,7 +64,7 @@ function StatusDot({ status }) {
   return <span className={`w-2.5 h-2.5 rounded-full inline-block ${cores[status]}`} />;
 }
 
-function Card({ sub, agora, onAvancar }) {
+function Card({ sub, agora, onAvancar, loading }) {
   const mesaNum = sub.pedido?.comanda?.mesa?.numero;
   const min = tempo(sub.criadoEm, agora);
   const proximo = STATUS_NEXT[sub.status];
@@ -132,9 +132,10 @@ function Card({ sub, agora, onAvancar }) {
         <div className="px-4 pb-4">
           <button
             onClick={() => onAvancar(sub.id, sub.status)}
-            className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-all ${btnEstilo[sub.status]}`}
+            disabled={loading}
+            className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed ${btnEstilo[sub.status]}`}
           >
-            {BTN_LABEL[sub.status]}
+            {loading ? '...' : BTN_LABEL[sub.status]}
           </button>
         </div>
       )}
@@ -162,6 +163,7 @@ export default function TerminalPage() {
   const [loading, setLoading]     = useState(true);
   const [filtro, setFiltro]       = useState('ativo');
   const [novoPing, setNovoPing]   = useState(false);
+  const [avancando, setAvancando] = useState(new Set());
   const agora = useAgora();
 
   const { ativo: somAtivo, ativar: ativarSom, beepTerminal } = useAudioNotificacao();
@@ -223,10 +225,14 @@ export default function TerminalPage() {
   }, [terminalId]);
 
   async function avancarStatus(subId, statusAtual) {
+    if (avancando.has(subId)) return;
+    setAvancando((prev) => new Set(prev).add(subId));
     try {
       await api.put(`/subpedidos/${subId}/status`, { status: STATUS_NEXT[statusAtual] });
     } catch {
       toast.error('Erro ao atualizar');
+    } finally {
+      setAvancando((prev) => { const s = new Set(prev); s.delete(subId); return s; });
     }
   }
 
@@ -342,7 +348,7 @@ export default function TerminalPage() {
                 return new Date(a.criadoEm) - new Date(b.criadoEm);
               })
               .map((sub) => (
-                <Card key={sub.id} sub={sub} agora={agora} onAvancar={avancarStatus} />
+                <Card key={sub.id} sub={sub} agora={agora} onAvancar={avancarStatus} loading={avancando.has(sub.id)} />
               ))}
           </div>
         )}

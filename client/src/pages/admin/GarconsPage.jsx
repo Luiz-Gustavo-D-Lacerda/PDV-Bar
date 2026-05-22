@@ -7,8 +7,8 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../lib/api';
 
-const ROLE_LABEL = { GARCOM: 'Garçom', CAIXA: 'Caixa' };
-const ROLE_COLOR = { GARCOM: 'bg-blue-100 text-blue-700', CAIXA: 'bg-purple-100 text-purple-700' };
+const ROLE_LABEL = { GARCOM: 'Garçom' };
+const ROLE_COLOR = { GARCOM: 'bg-blue-100 text-blue-700' };
 
 function fmt(v) { return Number(v).toFixed(2).replace('.', ','); }
 
@@ -114,7 +114,6 @@ function GarcomForm({ initial, onSave, onCancel }) {
           <select value={form.role} onChange={(e) => set('role', e.target.value)}
             className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
             <option value="GARCOM">Garçom</option>
-            <option value="CAIXA">Caixa</option>
           </select>
         </div>
       </div>
@@ -164,6 +163,13 @@ export default function GarconsPage() {
   const [editando, setEditando] = useState(null);
   const [aba, setAba] = useState('relatorio'); // 'relatorio' | 'equipe'
   const [periodo, setPeriodo] = useState('hoje');
+  const [mostrarInativos, setMostrarInativos] = useState(false);
+
+  // Ranking por produto
+  const [produtos, setProdutos] = useState([]);
+  const [produtoFiltro, setProdutoFiltro] = useState('');
+  const [rankingProduto, setRankingProduto] = useState([]);
+  const [loadingRanking, setLoadingRanking] = useState(false);
 
   const periodos = {
     hoje: (() => { const d = new Date(); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); })(),
@@ -184,6 +190,23 @@ export default function GarconsPage() {
   }
 
   useEffect(() => { load(); }, [periodo]);
+
+  useEffect(() => {
+    api.get('/cardapio').then(({ data }) => {
+      setProdutos(data.flatMap((cat) =>
+        cat.produtos.map((p) => ({ id: p.id, nome: p.nome, catNome: cat.nome }))
+      ));
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!produtoFiltro) { setRankingProduto([]); return; }
+    setLoadingRanking(true);
+    api.get(`/garcons/ranking-produto?produtoId=${produtoFiltro}&de=${periodos[periodo]}`)
+      .then(({ data }) => setRankingProduto(data))
+      .catch(() => toast.error('Erro ao carregar ranking'))
+      .finally(() => setLoadingRanking(false));
+  }, [produtoFiltro, periodo]);
 
   async function criar(form) {
     try {
@@ -211,6 +234,14 @@ export default function GarconsPage() {
       toast.error(msg);
       return msg;
     }
+  }
+
+  async function reativar(id) {
+    try {
+      await api.patch(`/garcons/${id}/ativar`);
+      toast.success('Garçom reativado!');
+      load();
+    } catch { toast.error('Erro ao reativar'); }
   }
 
   async function desativar(id) {
@@ -331,11 +362,14 @@ export default function GarconsPage() {
 
                         {/* Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-gray-900">{r.garcom.nome}</p>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLOR[r.garcom.role] || 'bg-gray-100 text-gray-600'}`}>
                               {ROLE_LABEL[r.garcom.role] || r.garcom.role}
                             </span>
+                            {!r.garcom.ativo && (
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-500">Inativo</span>
+                            )}
                           </div>
                           <p className="text-xs text-gray-400">{r.garcom.email}</p>
                         </div>
@@ -391,13 +425,123 @@ export default function GarconsPage() {
               })}
             </div>
           )}
+
+          {/* ── Ranking por produto ── */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-50">
+              <div className="flex items-center gap-2">
+                <Trophy size={17} className="text-purple-500" />
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">Ranking por produto / combo</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Quem mais vendeu um item específico no período — ideal para promoções</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1.5">Produto ou combo</label>
+                <select value={produtoFiltro} onChange={(e) => setProdutoFiltro(e.target.value)}
+                  className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                  <option value="">— Selecione um produto —</option>
+                  {Object.entries(
+                    produtos.reduce((acc, p) => {
+                      if (!acc[p.catNome]) acc[p.catNome] = [];
+                      acc[p.catNome].push(p);
+                      return acc;
+                    }, {})
+                  ).map(([catNome, prods]) => (
+                    <optgroup key={catNome} label={catNome}>
+                      {prods.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              {!produtoFiltro && (
+                <div className="text-center py-6 text-gray-400 text-sm">
+                  <ShoppingBag size={28} className="mx-auto mb-2 opacity-25" />
+                  Selecione um produto para ver quem mais vendeu
+                </div>
+              )}
+
+              {produtoFiltro && loadingRanking && (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="animate-spin text-green-600" size={24} />
+                </div>
+              )}
+
+              {produtoFiltro && !loadingRanking && (() => {
+                const comVendas = rankingProduto.filter((r) => r.quantidade > 0);
+                const semVendas = rankingProduto.filter((r) => r.quantidade === 0);
+                if (comVendas.length === 0) return (
+                  <div className="text-center py-8 text-gray-400">
+                    <ShoppingBag size={32} className="mx-auto mb-2 opacity-25" />
+                    <p className="text-sm">Nenhuma venda deste produto no período</p>
+                  </div>
+                );
+                return (
+                  <div className="space-y-2">
+                    {comVendas.map((r, idx) => (
+                      <div key={r.garcom.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : idx === 1 ? 'bg-gray-50 border border-gray-200' : 'bg-gray-50'}`}>
+                        <div className="w-7 flex items-center justify-center flex-shrink-0">
+                          <MedalIcon pos={idx} />
+                        </div>
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${idx === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-white shadow-sm text-gray-600'}`}>
+                          {r.garcom.nome.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-semibold text-gray-900 text-sm">{r.garcom.nome}</p>
+                            {!r.garcom.ativo && <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-100 text-red-500">Inativo</span>}
+                          </div>
+                          <p className="text-xs text-gray-400">{ROLE_LABEL[r.garcom.role] || r.garcom.role}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-black text-xl ${idx === 0 ? 'text-yellow-600' : 'text-gray-900'}`}>{r.quantidade}</p>
+                          <p className="text-xs text-gray-400">{r.quantidade === 1 ? 'unidade' : 'unidades'}</p>
+                        </div>
+                        <div className="text-right hidden sm:block min-w-[72px]">
+                          <p className="font-bold text-green-600 text-sm">R$ {fmt(r.total)}</p>
+                          <p className="text-xs text-gray-400">total</p>
+                        </div>
+                      </div>
+                    ))}
+                    {semVendas.length > 0 && (
+                      <p className="text-xs text-gray-400 text-center pt-1">
+                        {semVendas.length} garçom{semVendas.length > 1 ? 'ns' : ''} sem venda deste produto no período
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
         </div>
       )}
 
       {/* ── ABA: EQUIPE ── */}
       {aba === 'equipe' && (
         <div className="space-y-4">
-          {garcons.length === 0 && (
+          {/* Toolbar */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              {garcons.filter((g) => g.ativo).length} ativo{garcons.filter((g) => g.ativo).length !== 1 ? 's' : ''}
+              {garcons.filter((g) => !g.ativo).length > 0 && (
+                <span className="text-gray-400"> · {garcons.filter((g) => !g.ativo).length} inativo{garcons.filter((g) => !g.ativo).length !== 1 ? 's' : ''}</span>
+              )}
+            </p>
+            {garcons.some((g) => !g.ativo) && (
+              <button onClick={() => setMostrarInativos((v) => !v)}
+                className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${mostrarInativos ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                {mostrarInativos ? 'Ocultar inativos' : 'Mostrar inativos'}
+              </button>
+            )}
+          </div>
+
+          {garcons.filter((g) => g.ativo || mostrarInativos).length === 0 && (
             <div className="text-center py-12 text-gray-400">
               <Users size={40} className="mx-auto mb-3 opacity-30" />
               <p>Nenhum garçom cadastrado</p>
@@ -405,7 +549,7 @@ export default function GarconsPage() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {garcons.map((g) => (
+            {garcons.filter((g) => g.ativo || mostrarInativos).map((g) => (
               <div key={g.id}>
                 {editando === g.id ? (
                   <GarcomForm
@@ -428,13 +572,20 @@ export default function GarconsPage() {
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">{g.email}</p>
                     </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => setEditando(g.id)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
-                        <Pencil size={15} />
-                      </button>
-                      {g.ativo && (
-                        <button onClick={() => desativar(g.id)} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-400">
-                          <Trash2 size={15} />
+                    <div className="flex gap-1 items-center">
+                      {g.ativo ? (
+                        <>
+                          <button onClick={() => setEditando(g.id)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
+                            <Pencil size={15} />
+                          </button>
+                          <button onClick={() => desativar(g.id)} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-400">
+                            <Trash2 size={15} />
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => reativar(g.id)}
+                          className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg font-medium hover:bg-green-100 transition-colors">
+                          Reativar
                         </button>
                       )}
                     </div>

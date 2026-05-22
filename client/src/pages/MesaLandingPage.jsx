@@ -81,6 +81,22 @@ export default function MesaLandingPage() {
     </div>
   );
 
+  if (!mesa) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center bg-gray-50">
+      <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-3xl">⚠️</div>
+      <h2 className="text-xl font-bold text-gray-700">Mesa não encontrada</h2>
+      <p className="text-gray-500 text-sm">Verifique o QR Code e tente novamente.</p>
+    </div>
+  );
+
+  if (!mesa.ativa) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center bg-gray-50">
+      <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center text-3xl">🚫</div>
+      <h2 className="text-xl font-bold text-gray-700">Mesa {mesa.numero} indisponível</h2>
+      <p className="text-gray-500 text-sm">Esta mesa está desativada no momento.<br />Chame um garçom para ser atendido.</p>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}

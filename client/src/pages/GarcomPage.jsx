@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Coffee, Users, Loader2, Volume2, CheckCircle, X } from 'lucide-react';
+import { Bell, LogOut, Coffee, Users, Loader2, Volume2, CheckCircle, X, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import socket from '../lib/socket';
 import api from '../lib/api';
@@ -68,9 +68,10 @@ export default function GarcomPage() {
     navigate('/login');
   }
 
-  const mesasAtivas = mesas.filter((m) => m.ativa);
-  const ocupadas    = mesasAtivas.filter((m) => getMesaStatus(m) !== 'livre').length;
-  const prontas     = mesasAtivas.filter((m) => getMesaStatus(m) === 'pronto').length;
+  const mesasAtivas     = mesas.filter((m) => m.ativa);
+  const mesasComProntos = mesasAtivas.filter((m) => getMesaStatus(m) === 'pronto');
+  const ocupadas        = mesasAtivas.filter((m) => getMesaStatus(m) !== 'livre').length;
+  const prontas         = mesasComProntos.length;
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950">
@@ -155,6 +156,41 @@ export default function GarcomPage() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Para entregar */}
+      {mesasComProntos.length > 0 && (
+        <div className="px-4 pt-3 pb-1">
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+            <h2 className="font-bold text-gray-800 text-sm">Para entregar agora</h2>
+            <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+              {mesasComProntos.length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {mesasComProntos.map((mesa) => {
+              const nProntas = mesa.comandas?.filter((c) =>
+                c.pedidos?.some((p) => p.status === 'PRONTO')
+              ).length || 0;
+              return (
+                <Link key={mesa.id} to={`/mesa/${mesa.id}`}
+                  className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-3 flex items-center gap-3 active:scale-[0.98] transition-all hover:bg-blue-100">
+                  <div className="w-11 h-11 bg-blue-500 rounded-xl text-white font-black flex items-center justify-center text-xl flex-shrink-0">
+                    {mesa.numero}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-blue-900 text-sm">Mesa {mesa.numero}</p>
+                    <p className="text-xs text-blue-600">
+                      {nProntas} {nProntas === 1 ? 'pedido pronto' : 'pedidos prontos'} para entregar
+                    </p>
+                  </div>
+                  <ChevronRight size={18} className="text-blue-400 flex-shrink-0" />
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
 

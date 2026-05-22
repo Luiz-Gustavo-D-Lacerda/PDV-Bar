@@ -32,6 +32,34 @@ router.post('/', auth(['ADMIN', 'GERENTE']), async (req, res) => {
   }
 });
 
+router.patch('/:id/ativo', auth(['ADMIN', 'GERENTE']), async (req, res) => {
+  try {
+    const { ativo } = req.body;
+    const produto = await prisma.produto.update({
+      where: { id: req.params.id },
+      data: { ativo },
+      include: { categoria: true, terminal: true, estoque: true },
+    });
+    res.json(produto);
+  } catch {
+    res.status(500).json({ erro: 'Erro interno' });
+  }
+});
+
+router.patch('/:id/destaque', auth(['ADMIN', 'GERENTE']), async (req, res) => {
+  try {
+    const produto = await prisma.produto.findUnique({ where: { id: req.params.id } });
+    if (!produto) return res.status(404).json({ erro: 'Produto não encontrado' });
+    const atualizado = await prisma.produto.update({
+      where: { id: req.params.id },
+      data: { destaque: !produto.destaque },
+    });
+    res.json(atualizado);
+  } catch {
+    res.status(500).json({ erro: 'Erro interno' });
+  }
+});
+
 router.put('/:id', auth(['ADMIN', 'GERENTE']), async (req, res) => {
   try {
     const { nome, descricao, preco, imagemUrl, categoriaId, terminalId, ativo, estoqueMin } = req.body;

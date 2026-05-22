@@ -2,15 +2,27 @@ const router = require('express').Router();
 const prisma = require('../lib/prisma');
 const auth = require('../middleware/auth');
 
-router.get('/', auth(['ADMIN', 'GERENTE']), async (_req, res) => {
+router.get('/', auth(['ADMIN', 'GERENTE']), async (req, res) => {
   try {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
+    const { periodo = 'hoje' } = req.query;
 
+    const agora = new Date();
+    let inicio, fim;
+
+    if (periodo === 'hoje') {
+      inicio = new Date(agora); inicio.setHours(0, 0, 0, 0);
+      fim    = new Date(agora); fim.setHours(23, 59, 59, 999);
+    } else if (periodo === 'semana') {
+      inicio = new Date(agora); inicio.setDate(agora.getDate() - 6); inicio.setHours(0, 0, 0, 0);
+      fim    = new Date(agora); fim.setHours(23, 59, 59, 999);
+    } else {
+      inicio = new Date(agora.getFullYear(), agora.getMonth(), 1);
+      fim    = new Date(agora); fim.setHours(23, 59, 59, 999);
+    }
+
+    // ── Comandas pagas no período ─────────────────────────────────────────────
     const comandasPagas = await prisma.comanda.findMany({
-      where: { status: 'PAGA', fechadoEm: { gte: hoje, lt: amanha } },
+      where: { status: 'PAGA', fechadoEm: { gte: inicio, lte: fim } },
       include: {
         pedidos: {
           include: {
@@ -25,31 +37,40 @@ router.get('/', auth(['ADMIN', 'GERENTE']), async (_req, res) => {
 
     let faturamento = 0;
     const produtosContagem = {};
-    const porFormaPagamento = { PIX: 0, CARTAO: 0, DINHEIRO: 0 };
+    const porFormaPagamento = {
+      PIX:      { count: 0, total: 0 },
+      CARTAO:   { count: 0, total: 0 },
+      DINHEIRO: { count: 0, total: 0 },
+    };
 
     for (const comanda of comandasPagas) {
-      if (comanda.formaPagamento) {
-        porFormaPagamento[comanda.formaPagamento] = (porFormaPagamento[comanda.formaPagamento] || 0) + 1;
-      }
+      let totalComanda = 0;
       for (const pedido of comanda.pedidos) {
         for (const sub of pedido.subPedidos) {
           for (const item of sub.itens) {
-            faturamento += Number(item.precoUnitario) * item.quantidade;
+            const valor = Number(item.precoUnitario) * item.quantidade;
+            totalComanda += valor;
+            faturamento  += valor;
             produtosContagem[item.produtoId] = (produtosContagem[item.produtoId] || 0) + item.quantidade;
           }
         }
+      }
+      if (comanda.formaPagamento && porFormaPagamento[comanda.formaPagamento]) {
+        porFormaPagamento[comanda.formaPagamento].count++;
+        porFormaPagamento[comanda.formaPagamento].total += totalComanda;
       }
     }
 
     const ticketMedio = comandasPagas.length > 0 ? faturamento / comandasPagas.length : 0;
 
-    const topProdutosIds = Object.entries(produtosContagem)
+    // ── Top 5 mais vendidos ───────────────────────────────────────────────────
+    const topIds = Object.entries(produtosContagem)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([id]) => id);
 
     const topProdutos = await prisma.produto.findMany({
-      where: { id: { in: topProdutosIds } },
+      where: { id: { in: topIds } },
       select: { id: true, nome: true },
     });
 
@@ -57,29 +78,63 @@ router.get('/', auth(['ADMIN', 'GERENTE']), async (_req, res) => {
       .map((p) => ({ ...p, quantidade: produtosContagem[p.id] || 0 }))
       .sort((a, b) => b.quantidade - a.quantidade);
 
-    const alertas = await prisma.$queryRaw`
-      SELECT e.id, e.quantidade, e.minimo, p.nome as "produtoNome", p.id as "produtoId"
-      FROM "Estoque" e
-      JOIN "Produto" p ON p.id = e."produtoId"
-      WHERE e.quantidade <= e.minimo AND p.ativo = true
-    `;
-
+    // ── Pedidos em aberto (tempo real) ────────────────────────────────────────
     const pedidosAbertos = await prisma.pedido.count({
       where: { status: { notIn: ['ENTREGUE', 'CANCELADO'] } },
     });
 
-    const mesasAbertas = await prisma.comanda.count({
-      where: { status: { in: ['ABERTA', 'AGUARDANDO_PAGAMENTO'] } },
+    // ── Status das mesas (tempo real) ─────────────────────────────────────────
+    const mesas = await prisma.mesa.findMany({
+      where: { ativa: true },
+      include: {
+        comandas: {
+          where: { status: { in: ['ABERTA', 'AGUARDANDO_PAGAMENTO'] } },
+          include: { pedidos: { select: { status: true } } },
+        },
+      },
     });
 
+    let mesasLivres = 0, mesasOcupadas = 0, mesasAguardando = 0, mesasProntas = 0;
+    for (const mesa of mesas) {
+      if (mesa.comandas.length === 0) {
+        mesasLivres++;
+      } else if (mesa.comandas.some((c) => c.status === 'AGUARDANDO_PAGAMENTO')) {
+        mesasAguardando++;
+      } else if (mesa.comandas.some((c) => c.pedidos.some((p) => p.status === 'PRONTO'))) {
+        mesasProntas++;
+      } else {
+        mesasOcupadas++;
+      }
+    }
+
+    // ── Alertas de estoque (produtos + insumos) ───────────────────────────────
+    const estoques = await prisma.estoque.findMany({
+      include: { produto: { select: { nome: true, ativo: true } } },
+    });
+    const alertasProdutos = estoques
+      .filter((e) => e.quantidade <= e.minimo && e.produto.ativo)
+      .map((e) => ({ id: e.id, nome: e.produto.nome, quantidade: e.quantidade, minimo: e.minimo, tipo: 'produto' }));
+
+    const insumos = await prisma.insumo.findMany({ where: { ativo: true } });
+    const alertasInsumos = insumos
+      .filter((i) => i.quantidade <= i.minimo)
+      .map((i) => ({ id: i.id, nome: i.nome, quantidade: i.quantidade, minimo: i.minimo, tipo: 'insumo', setor: i.setor }));
+
     res.json({
+      periodo,
       faturamento,
       ticketMedio,
       totalComandas: comandasPagas.length,
       maisVendidos,
-      alertasEstoque: alertas,
+      alertasEstoque: [...alertasProdutos, ...alertasInsumos],
       pedidosAbertos,
-      mesasAbertas,
+      mesas: {
+        total: mesas.length,
+        livres: mesasLivres,
+        ocupadas: mesasOcupadas,
+        aguardando: mesasAguardando,
+        prontas: mesasProntas,
+      },
       porFormaPagamento,
     });
   } catch (e) {
