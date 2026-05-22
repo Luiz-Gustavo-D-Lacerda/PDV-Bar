@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, CheckCircle, Coffee, Users, Loader2 } from 'lucide-react';
+import { Bell, LogOut, CheckCircle, Coffee, Users, Loader2, Volume2 } from 'lucide-react';
+import useAudioNotificacao from '../hooks/useAudioNotificacao';
 import toast from 'react-hot-toast';
 import socket from '../lib/socket';
 import api from '../lib/api';
@@ -19,6 +20,7 @@ export default function GarcomPage() {
   const [mesas, setMesas] = useState([]);
   const [notificacoes, setNotificacoes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { ativo: somAtivo, ativar: ativarSom, beepPronto } = useAudioNotificacao();
 
   async function loadMesas() {
     try {
@@ -39,6 +41,7 @@ export default function GarcomPage() {
     socket.on('pedido_pronto', (data) => {
       setNotificacoes((n) => [data, ...n.slice(0, 9)]);
       toast.success(`Mesa ${data.mesaNumero}: pedido pronto!`, { duration: 5000 });
+      beepPronto();
       loadMesas();
     });
 
@@ -83,6 +86,15 @@ export default function GarcomPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {!somAtivo && (
+            <button
+              onClick={ativarSom}
+              className="flex items-center gap-1 text-green-300 text-xs hover:text-white"
+              title="Ativar notificações sonoras"
+            >
+              <Volume2 size={15} /> Som
+            </button>
+          )}
           {notificacoes.length > 0 && (
             <div className="relative">
               <Bell size={20} />

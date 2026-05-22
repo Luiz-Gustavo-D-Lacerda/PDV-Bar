@@ -67,6 +67,26 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Formas de pagamento */}
+      {(data?.porFormaPagamento?.PIX > 0 || data?.porFormaPagamento?.CARTAO > 0 || data?.porFormaPagamento?.DINHEIRO > 0) && (
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <h2 className="font-bold text-gray-800 mb-4">Formas de pagamento hoje</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { key: 'PIX',     label: 'PIX',     icon: '📱', color: 'bg-blue-50 text-blue-700' },
+              { key: 'CARTAO',  label: 'Cartão',  icon: '💳', color: 'bg-purple-50 text-purple-700' },
+              { key: 'DINHEIRO',label: 'Dinheiro',icon: '💵', color: 'bg-green-50 text-green-700' },
+            ].map(({ key, label, icon, color }) => (
+              <div key={key} className={`${color} rounded-xl p-4 text-center`}>
+                <p className="text-2xl">{icon}</p>
+                <p className="text-2xl font-black mt-1">{data.porFormaPagamento[key] || 0}</p>
+                <p className="text-xs font-medium mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Mais vendidos */}
         <div className="bg-white rounded-xl shadow-sm p-5">

@@ -25,6 +25,11 @@ const PERMISSOES_CONFIG = [
     label: 'Cancelar pedidos',
     desc: 'Pode cancelar itens de uma comanda diretamente pelo app',
   },
+  {
+    key: 'receberDinheiro',
+    label: 'Receber pagamento em dinheiro',
+    desc: 'Pode fechar contas com a opção "Dinheiro" ao cobrar o cliente',
+  },
 ];
 
 function GarcomForm({ initial, onSave, onCancel }) {

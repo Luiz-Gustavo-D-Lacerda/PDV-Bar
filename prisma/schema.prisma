@@ -46,14 +46,16 @@ model Mesa {
 }
 
 model Comanda {
-  id         String        @id @default(uuid())
-  mesa       Mesa          @relation(fields: [mesaId], references: [id])
-  mesaId     String
-  nome       String?
-  status     StatusComanda @default(ABERTA)
-  pedidos    Pedido[]
-  criadoEm  DateTime      @default(now())
-  fechadoEm DateTime?
+  id             String          @id @default(uuid())
+  mesa           Mesa            @relation(fields: [mesaId], references: [id])
+  mesaId         String
+  nome           String?
+  status         StatusComanda   @default(ABERTA)
+  formaPagamento FormaPagamento?
+  pago           Boolean         @default(false)
+  pedidos        Pedido[]
+  criadoEm       DateTime        @default(now())
+  fechadoEm      DateTime?
 }
 
 enum StatusComanda {
@@ -61,6 +63,12 @@ enum StatusComanda {
   AGUARDANDO_PAGAMENTO
   PAGA
   CANCELADA
+}
+
+enum FormaPagamento {
+  PIX
+  CARTAO
+  DINHEIRO
 }
 
 model Pedido {

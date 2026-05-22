@@ -25,8 +25,12 @@ router.get('/', auth(['ADMIN', 'GERENTE']), async (_req, res) => {
 
     let faturamento = 0;
     const produtosContagem = {};
+    const porFormaPagamento = { PIX: 0, CARTAO: 0, DINHEIRO: 0 };
 
     for (const comanda of comandasPagas) {
+      if (comanda.formaPagamento) {
+        porFormaPagamento[comanda.formaPagamento] = (porFormaPagamento[comanda.formaPagamento] || 0) + 1;
+      }
       for (const pedido of comanda.pedidos) {
         for (const sub of pedido.subPedidos) {
           for (const item of sub.itens) {
@@ -76,6 +80,7 @@ router.get('/', auth(['ADMIN', 'GERENTE']), async (_req, res) => {
       alertasEstoque: alertas,
       pedidosAbertos,
       mesasAbertas,
+      porFormaPagamento,
     });
   } catch (e) {
     console.error(e);

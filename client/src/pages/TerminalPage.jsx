@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import useAudioNotificacao from '../hooks/useAudioNotificacao';
 import { Loader2, Clock, ChefHat, CheckCircle2, Flame, Bell, Timer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import socket from '../lib/socket';
@@ -163,6 +164,7 @@ export default function TerminalPage() {
   const [novoPing, setNovoPing]   = useState(false);
   const agora = useAgora();
 
+  const { ativo: somAtivo, ativar: ativarSom, beepTerminal } = useAudioNotificacao();
   const [horaAtual, setHoraAtual] = useState('');
   useEffect(() => {
     const id = setInterval(() => {
@@ -200,6 +202,7 @@ export default function TerminalPage() {
       setSubPedidos((prev) => [sub, ...prev]);
       setNovoPing(true);
       setTimeout(() => setNovoPing(false), 2000);
+      beepTerminal();
       toast(`🍽️ Novo pedido — Mesa ${sub.pedido?.comanda?.mesa?.numero || '?'}`, {
         duration: 5000,
         style: { background: '#1f2937', color: '#fff', fontWeight: 'bold' },
@@ -274,6 +277,14 @@ export default function TerminalPage() {
 
         {/* Relógio + filtro */}
         <div className="ml-auto flex items-center gap-3">
+          {!somAtivo && (
+            <button
+              onClick={ativarSom}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/20 text-yellow-300 text-xs font-medium hover:bg-yellow-500/30 transition-colors"
+            >
+              <Bell size={13} /> Ativar som
+            </button>
+          )}
           {novoPing && (
             <Bell size={18} className="text-yellow-400 animate-bounce" />
           )}

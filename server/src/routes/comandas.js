@@ -103,19 +103,33 @@ router.post('/:id/pedido', async (req, res) => {
   }
 });
 
-// Fechar comanda (solicitar pagamento)
+// Fechar comanda com forma de pagamento → vai direto para PAGA
 router.post('/:id/fechar', auth(['ADMIN', 'GERENTE', 'CAIXA', 'GARCOM']), async (req, res) => {
   try {
+    const { formaPagamento } = req.body;
+    const FORMAS_VALIDAS = ['PIX', 'CARTAO', 'DINHEIRO'];
+    if (!formaPagamento || !FORMAS_VALIDAS.includes(formaPagamento)) {
+      return res.status(400).json({ erro: 'Forma de pagamento inválida' });
+    }
+
+    if (formaPagamento === 'DINHEIRO' && ['GARCOM', 'CAIXA'].includes(req.user.role)) {
+      const dbUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+      const perms = dbUser?.permissoes || {};
+      if (!perms.receberDinheiro) {
+        return res.status(403).json({ erro: 'Sem permissão para receber pagamento em dinheiro' });
+      }
+    }
+
     const comanda = await prisma.comanda.findUnique({ where: { id: req.params.id } });
     if (!comanda) return res.status(404).json({ erro: 'Comanda não encontrada' });
     if (comanda.status !== 'ABERTA') return res.status(400).json({ erro: 'Comanda não está aberta' });
 
     const atualizada = await prisma.comanda.update({
       where: { id: req.params.id },
-      data: { status: 'AGUARDANDO_PAGAMENTO' },
+      data: { status: 'PAGA', pago: true, formaPagamento, fechadoEm: new Date() },
     });
     req.io.to('garcom').emit('comanda_atualizada', { mesaId: comanda.mesaId });
-    req.io.to(`mesa:${comanda.mesaId}`).emit('comanda_atualizada', { mesaId: comanda.mesaId });
+    req.io.to(`mesa:${comanda.mesaId}`).emit('comanda_atualizada', { status: 'PAGA' });
     res.json(atualizada);
   } catch {
     res.status(500).json({ erro: 'Erro interno' });

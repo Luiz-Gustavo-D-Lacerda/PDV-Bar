@@ -22,6 +22,67 @@ const STATUS_COLOR = {
   CANCELADO: 'bg-red-100 text-red-600',
 };
 
+const FORMA_OPCOES = [
+  { key: 'PIX',     label: 'PIX',     icon: '📱', desc: 'Pagamento instantâneo' },
+  { key: 'CARTAO',  label: 'Cartão',  icon: '💳', desc: 'Débito ou crédito' },
+  { key: 'DINHEIRO',label: 'Dinheiro',icon: '💵', desc: 'Pagamento em espécie' },
+];
+
+function ModalPagamento({ total, podeDinheiro, onConfirm, onClose, loading }) {
+  const [forma, setForma] = useState(null);
+  const opcoes = FORMA_OPCOES.filter((o) => o.key !== 'DINHEIRO' || podeDinheiro);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <div>
+          <h3 className="font-bold text-gray-900 text-lg">Fechar conta</h3>
+          <p className="text-3xl font-black text-green-600 mt-1">R$ {total}</p>
+        </div>
+        <p className="text-sm text-gray-500">Selecione a forma de pagamento:</p>
+        <div className="space-y-2">
+          {opcoes.map(({ key, label, icon, desc }) => (
+            <button
+              key={key}
+              onClick={() => setForma(key)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${
+                forma === key
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <span className="text-2xl">{icon}</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">{label}</p>
+                <p className="text-xs text-gray-400">{desc}</p>
+              </div>
+              {forma === key && (
+                <span className="ml-auto w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                  <span className="text-white text-xs">✓</span>
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} disabled={loading}
+            className="flex-1 py-2.5 border rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50">
+            Cancelar
+          </button>
+          <button
+            onClick={() => forma && onConfirm(forma)}
+            disabled={!forma || loading}
+            className="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading && <Loader2 size={14} className="animate-spin" />}
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModalCancelar({ sub, onConfirm, onClose }) {
   const [motivo, setMotivo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,6 +141,7 @@ export default function ComandaPage() {
   const [comanda, setComanda] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cancelando, setCancelando] = useState(null);
+  const [modalPagamento, setModalPagamento] = useState(false);
   const [loadingPagar, setLoadingPagar] = useState(false);
 
   const isStaff = !!token;
@@ -91,6 +153,10 @@ export default function ComandaPage() {
     (user?.role === 'ADMIN' ||
       user?.role === 'GERENTE' ||
       user?.permissoes?.cancelarItens);
+
+  const podeDinheiro =
+    ['ADMIN', 'GERENTE'].includes(user?.role) ||
+    !!user?.permissoes?.receberDinheiro;
 
   async function loadComanda() {
     try {
@@ -127,27 +193,15 @@ export default function ComandaPage() {
     }
   }
 
-  async function pedirConta() {
+  async function fecharConta(formaPagamento) {
+    setLoadingPagar(true);
     try {
-      setLoadingPagar(true);
-      await api.post(`/comandas/${comanda.id}/fechar`);
-      toast.success('Conta solicitada!');
+      await api.post(`/comandas/${comanda.id}/fechar`, { formaPagamento });
+      toast.success('Conta fechada!');
+      setModalPagamento(false);
       loadComanda();
     } catch (e) {
-      toast.error(e.response?.data?.erro || 'Erro ao solicitar conta');
-    } finally {
-      setLoadingPagar(false);
-    }
-  }
-
-  async function confirmarPagamento() {
-    try {
-      setLoadingPagar(true);
-      await api.post(`/comandas/${comanda.id}/pagar`);
-      toast.success('Pagamento confirmado!');
-      loadComanda();
-    } catch (e) {
-      toast.error(e.response?.data?.erro || 'Erro ao confirmar pagamento');
+      toast.error(e.response?.data?.erro || 'Erro ao fechar conta');
     } finally {
       setLoadingPagar(false);
     }
@@ -187,6 +241,15 @@ export default function ComandaPage() {
           sub={cancelando}
           onConfirm={confirmarCancelamento}
           onClose={() => setCancelando(null)}
+        />
+      )}
+      {modalPagamento && (
+        <ModalPagamento
+          total={total.toFixed(2).replace('.', ',')}
+          podeDinheiro={podeDinheiro}
+          onConfirm={fecharConta}
+          onClose={() => setModalPagamento(false)}
+          loading={loadingPagar}
         />
       )}
 
@@ -303,38 +366,28 @@ export default function ComandaPage() {
               Adicionar mais itens
             </Link>
 
-            {/* Pedir a conta — garçom autenticado */}
             {isGarcom && (
-              <button onClick={pedirConta} disabled={loadingPagar}
-                className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white py-2.5 rounded-xl font-medium hover:bg-gray-800 transition-colors disabled:opacity-50">
-                {loadingPagar ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}
-                Pedir a conta
+              <button
+                onClick={() => setModalPagamento(true)}
+                className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white py-2.5 rounded-xl font-medium hover:bg-gray-800 transition-colors"
+              >
+                <Receipt size={16} />
+                Fechar conta
               </button>
             )}
 
-            {/* Mensagem para cliente não autenticado */}
             {!isStaff && (
               <p className="text-center text-sm text-gray-500 py-1">
-                Para pagar, chame o garçom ou vá ao caixa.
+                Para pagar, chame o garçom.
               </p>
             )}
           </>
         )}
 
         {aguardando && (
-          <>
-            {isCaixa ? (
-              <button onClick={confirmarPagamento} disabled={loadingPagar}
-                className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-2.5 rounded-xl font-semibold hover:bg-green-700 transition-colors disabled:opacity-50">
-                {loadingPagar ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                Confirmar pagamento
-              </button>
-            ) : (
-              <div className="text-center text-sm text-purple-600 font-medium py-1">
-                Conta solicitada — aguardando o caixa
-              </div>
-            )}
-          </>
+          <div className="text-center text-sm text-purple-600 font-medium py-1">
+            Conta solicitada — aguardando o caixa
+          </div>
         )}
 
         {paga && (
