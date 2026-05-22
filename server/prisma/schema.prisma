@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String   @id @default(uuid())
+  nome     String
+  email    String?  @unique
+  senha    String
+  role     Role     @default(GARCOM)
+  ativo      Boolean  @default(true)
+  permissoes Json     @default("{}")
+  criadoEm   DateTime @default(now())
+  pedidos    Pedido[]
+}
+
+enum Role {
+  ADMIN
+  GERENTE
+  GARCOM
+  CAIXA
+}
+
+model Terminal {
+  id         String      @id @default(uuid())
+  nome       String
+  cor        String      @default("#1D9E75")
+  icone      String      @default("tool-kitchen-2")
+  ativo      Boolean     @default(true)
+  ordem      Int         @default(0)
+  produtos   Produto[]
+  subPedidos SubPedido[]
+  criadoEm  DateTime    @default(now())
+}
+
+model Mesa {
+  id       String    @id @default(uuid())
+  numero   Int       @unique
+  ativa    Boolean   @default(true)
+  comandas Comanda[]
+}
+
+model Comanda {
+  id             String          @id @default(uuid())
+  mesa           Mesa            @relation(fields: [mesaId], references: [id])
+  mesaId         String
+  nome           String?
+  status         StatusComanda   @default(ABERTA)
+  formaPagamento FormaPagamento?
+  pago           Boolean         @default(false)
+  pedidos        Pedido[]
+  criadoEm       DateTime        @default(now())
+  fechadoEm      DateTime?
+}
+
+enum StatusComanda {
+  ABERTA
+  AGUARDANDO_PAGAMENTO
+  PAGA
+  CANCELADA
+}
+
+enum FormaPagamento {
+  PIX
+  CARTAO
+  DINHEIRO
+}
+
+model Pedido {
+  id         String       @id @default(uuid())
+  comanda    Comanda      @relation(fields: [comandaId], references: [id])
+  comandaId  String
+  garcom     User?        @relation(fields: [garcomId], references: [id])
+  garcomId   String?
+  subPedidos SubPedido[]
+  status     StatusPedido @default(RECEBIDO)
+  criadoEm  DateTime     @default(now())
+}
+
+enum StatusPedido {
+  RECEBIDO
+  EM_PREPARO
+  PRONTO
+  ENTREGUE
+  CANCELADO
+}
+
+model SubPedido {
+  id         String          @id @default(uuid())
+  pedido     Pedido          @relation(fields: [pedidoId], references: [id])
+  pedidoId   String
+  terminal   Terminal        @relation(fields: [terminalId], references: [id])
+  terminalId String
+  itens      ItemSubPedido[]
+  status             StatusPedido    @default(RECEBIDO)
+  motivoCancelamento String?
+  criadoEm           DateTime        @default(now())
+}
+
+model ItemSubPedido {
+  id            String    @id @default(uuid())
+  subPedido     SubPedido @relation(fields: [subPedidoId], references: [id])
+  subPedidoId   String
+  produto       Produto   @relation(fields: [produtoId], references: [id])
+  produtoId     String
+  quantidade    Int
+  observacao    String?
+  precoUnitario Decimal
+}
+
+model Categoria {
+  id       String    @id @default(uuid())
+  nome     String
+  ordem    Int       @default(0)
+  ativo    Boolean   @default(true)
+  produtos Produto[]
+}
+
+model Produto {
+  id          String          @id @default(uuid())
+  nome        String
+  descricao   String?
+  preco       Decimal
+  imagemUrl   String?
+  ativo       Boolean         @default(true)
+  destaque    Boolean         @default(false)
+  categoria   Categoria       @relation(fields: [categoriaId], references: [id])
+  categoriaId String
+  terminal    Terminal        @relation(fields: [terminalId], references: [id])
+  terminalId  String
+  estoque     Estoque?
+  itens       ItemSubPedido[]
+  criadoEm   DateTime        @default(now())
+}
+
+model Estoque {
+  id            String                @id @default(uuid())
+  produto       Produto               @relation(fields: [produtoId], references: [id])
+  produtoId     String                @unique
+  quantidade    Int                   @default(0)
+  minimo        Int                   @default(5)
+  movimentacoes MovimentacaoEstoque[]
+}
+
+model Configuracoes {
+  id        String   @id @default("singleton")
+  dados     Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+model MovimentacaoEstoque {
+  id         String           @id @default(uuid())
+  estoque    Estoque          @relation(fields: [estoqueId], references: [id])
+  estoqueId  String
+  tipo       TipoMovimentacao
+  quantidade Int
+  motivo     String?
+  criadoEm  DateTime         @default(now())
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+  AJUSTE
+}
+
+enum SetorInsumo {
+  BAR
+  COZINHA
+  GERAL
+}
+
+model Insumo {
+  id            String               @id @default(uuid())
+  nome          String
+  unidade       String               @default("un")
+  quantidade    Float                @default(0)
+  minimo        Float                @default(0)
+  setor         SetorInsumo          @default(GERAL)
+  ativo         Boolean              @default(true)
+  criadoEm      DateTime             @default(now())
+  movimentacoes MovimentacaoInsumo[]
+}
+
+model MovimentacaoInsumo {
+  id         String           @id @default(uuid())
+  insumo     Insumo           @relation(fields: [insumoId], references: [id])
+  insumoId   String
+  tipo       TipoMovimentacao
+  quantidade Float
+  motivo     String?
+  criadoEm   DateTime         @default(now())
+}
